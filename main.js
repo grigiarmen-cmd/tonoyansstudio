@@ -338,7 +338,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const single = selectedServices[0] || { name: 'Haarbehandlung', price: '', duration: 30, durationLabel: 'ca. 30 Min.' };
       servicesList.innerHTML = `<strong id="modal-service-title">${escapeHtml(single.name)}</strong>`;
       priceDisplay.textContent = single.price;
-      currentBookingDuration = Math.min(single.duration || 30, 90);
+      currentBookingDuration = single.duration || 30;
 
       if (durationPill) {
         durationPill.style.display = 'inline-flex';
@@ -354,18 +354,25 @@ document.addEventListener('DOMContentLoaded', () => {
     const count = selectedServices.length;
 
     // Mathe-Logik:
-    // Einzelservice: reale Dauer des Services (max 90 Min. für Buchungsslot)
-    // Ab 2 Services (Kombi-Termin): Summe der Einzeldauern, maximal gedeckelt auf 90 Minuten (Kombi-Limit)
+    // Einzelservice: Reale Dauer des Services (z. B. Strähnen / Balayage = 150 Min., Ansatzfärbung = 60 Min., Schnitt = 45 Min.)
+    // Kombi-Termin (ab 2 Services hinzugefügt):
+    // Wenn ein großer Service wie Strähnen / Balayage (150 Min.) dabei ist, gilt mindestens diese Dauer (150 Min.).
+    // Ansonsten werden die Einzeldauern addiert, maximal aber auf mindestens 90 Min. gesetzt (bzw. max 90 Min. für normale Schnitt/Styling/Farbe-Kombis).
     if (count <= 1) {
       const single = selectedServices[0] || { duration: 45, durationLabel: 'ca. 45 Min.' };
-      currentBookingDuration = Math.min(single.duration || 45, 90);
+      currentBookingDuration = single.duration || 45;
     } else {
-      let sumDur = 0;
-      selectedServices.forEach(s => {
-        sumDur += (s.duration || 45);
-      });
-      // Maximal 90 min egal wie viele Services hinzugefügt werden
-      currentBookingDuration = Math.min(sumDur, 90);
+      const hasLongService = selectedServices.some(s => (s.duration || 0) >= 150);
+      if (hasLongService) {
+        currentBookingDuration = 150; // Strähnen / Balayage + weitere Leistung = 2,5 Std. Zeitfenster
+      } else {
+        let sumDur = 0;
+        selectedServices.forEach(s => {
+          sumDur += (s.duration || 45);
+        });
+        // Maximal 90 min für Standard-Kombi-Termine
+        currentBookingDuration = Math.min(sumDur, 90);
+      }
     }
 
     if (selLabel) {
@@ -402,7 +409,8 @@ document.addEventListener('DOMContentLoaded', () => {
       if (durationPill) {
         durationPill.style.display = 'inline-flex';
         durationPill.classList.add('duration-combo');
-        durationText.innerHTML = `<strong>⏱ Dauer: ${currentBookingDuration} Min.</strong> (Kombi-Termin, max. 90 Min.)`;
+        const durText = currentBookingDuration >= 120 ? `${Math.floor(currentBookingDuration / 60)} Std. ${currentBookingDuration % 60 ? (currentBookingDuration % 60) + ' Min.' : ''}`.trim() : `${currentBookingDuration} Min.`;
+        durationText.innerHTML = `<strong>⏱ Dauer: ${durText}</strong> (Kombi-Termin)`;
       }
       if (comboNotice) comboNotice.style.display = 'flex';
       if (timeDurationHint) {
@@ -502,7 +510,7 @@ document.addEventListener('DOMContentLoaded', () => {
                        service.toLowerCase().includes('färbung') || 
                        service.toLowerCase().includes('glossing');
 
-      currentBookingDuration = Math.min(dur, 90);
+      currentBookingDuration = dur;
       selectedServices = [{
         name: service,
         price: price,
@@ -636,7 +644,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const opt = document.createElement('option');
       opt.value = slot;
-      opt.textContent = slot + ' Uhr' + (reqDuration >= 90 ? ` (bis ${addMinutes(slot, reqDuration)} Uhr)` : '');
+      opt.textContent = slot + ' Uhr' + (reqDuration > 30 ? ` (bis ${addMinutes(slot, reqDuration)} Uhr)` : '');
       timeInput.appendChild(opt);
       hasOptions = true;
     });
@@ -645,7 +653,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const opt = document.createElement('option');
       opt.value = '';
       opt.disabled = true;
-      opt.textContent = reqDuration >= 90 ? 'Kein freies 90-Minuten-Zeitfenster verfügbar' : 'Keine Uhrzeiten verfügbar';
+      opt.textContent = `Kein freies ${reqDuration}-Minuten-Zeitfenster verfügbar`;
       timeInput.appendChild(opt);
     }
   }
