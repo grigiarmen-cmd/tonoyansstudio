@@ -259,7 +259,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Multi-service booking state
   let selectedServices = [];
   let isDamenBooking = false;
-  let currentBookingDuration = 30; // 30 min for 1 service, 90 min if >= 2 Damen services
+  let currentBookingDuration = 30; // Max 90 min
 
   function getAvailableDamenServices() {
     const damenBtns = document.querySelectorAll('.booking-btn[data-category="damen"]');
@@ -267,8 +267,10 @@ document.addEventListener('DOMContentLoaded', () => {
     damenBtns.forEach(b => {
       const name = b.getAttribute('data-service');
       const price = b.getAttribute('data-price') || b.textContent.trim();
+      const dur = parseInt(b.getAttribute('data-duration'), 10) || 45;
+      const durLabel = b.getAttribute('data-duration-label') || (dur + ' Min.');
       if (name && !services.some(s => s.name === name)) {
-        services.push({ name, price });
+        services.push({ name, price, duration: dur, durationLabel: durLabel });
       }
     });
     return services;
@@ -292,15 +294,17 @@ document.addEventListener('DOMContentLoaded', () => {
           <span class="picker-item-name">${escapeHtml(item.name)}</span>
           <span class="picker-item-price">${escapeHtml(item.price)}</span>
         </div>
-        <button type="button" class="btn-add-picker-item" onclick="addSelectedDamenService('${escapeHtml(item.name)}', '${escapeHtml(item.price)}')">
+        <button type="button" class="btn-add-picker-item" onclick="addSelectedDamenService('${escapeHtml(item.name)}', '${escapeHtml(item.price)}', ${item.duration}, '${escapeHtml(item.durationLabel)}')">
           <i class="fa-solid fa-plus"></i> Hinzufügen
         </button>
       </div>
     `).join('');
   }
 
-  window.addSelectedDamenService = function(name, price) {
-    selectedServices.push({ name, price, category: 'damen' });
+  window.addSelectedDamenService = function(name, price, duration, durationLabel) {
+    const dur = parseInt(duration, 10) || 45;
+    const durLbl = durationLabel || (dur + ' Min.');
+    selectedServices.push({ name, price, duration: dur, durationLabel: durLbl, category: 'damen' });
     updateSelectedServicesUI();
     const pickerEl = document.getElementById('damen-service-picker');
     if (pickerEl) pickerEl.style.display = 'none';
@@ -327,15 +331,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (!isDamenBooking) {
       if (multiSection) multiSection.style.display = 'none';
-      if (durationPill) durationPill.style.display = 'none';
       if (comboNotice) comboNotice.style.display = 'none';
       if (timeDurationHint) timeDurationHint.style.display = 'none';
       if (selLabel) selLabel.textContent = 'Gewählte Behandlung:';
 
-      const single = selectedServices[0] || { name: 'Haarbehandlung', price: '' };
+      const single = selectedServices[0] || { name: 'Haarbehandlung', price: '', duration: 30, durationLabel: 'ca. 30 Min.' };
       servicesList.innerHTML = `<strong id="modal-service-title">${escapeHtml(single.name)}</strong>`;
       priceDisplay.textContent = single.price;
-      currentBookingDuration = 30;
+      currentBookingDuration = Math.min(single.duration || 30, 90);
+
+      if (durationPill) {
+        durationPill.style.display = 'inline-flex';
+        durationPill.classList.remove('duration-combo');
+        durationText.textContent = 'Dauer: ' + (single.durationLabel || `${currentBookingDuration} Min.`);
+      }
       return;
     }
 
@@ -343,8 +352,21 @@ document.addEventListener('DOMContentLoaded', () => {
     if (multiSection) multiSection.style.display = 'block';
 
     const count = selectedServices.length;
-    // Automatic 90 minutes from 2 or more services, regardless of how many (2, 3, 4, 5, etc.)
-    currentBookingDuration = count >= 2 ? 90 : 30;
+
+    // Mathe-Logik:
+    // Einzelservice: reale Dauer des Services (max 90 Min. für Buchungsslot)
+    // Ab 2 Services (Kombi-Termin): Summe der Einzeldauern, maximal gedeckelt auf 90 Minuten (Kombi-Limit)
+    if (count <= 1) {
+      const single = selectedServices[0] || { duration: 45, durationLabel: 'ca. 45 Min.' };
+      currentBookingDuration = Math.min(single.duration || 45, 90);
+    } else {
+      let sumDur = 0;
+      selectedServices.forEach(s => {
+        sumDur += (s.duration || 45);
+      });
+      // Maximal 90 min egal wie viele Services hinzugefügt werden
+      currentBookingDuration = Math.min(sumDur, 90);
+    }
 
     if (selLabel) {
       selLabel.textContent = count > 1 ? `Gewählte Behandlungen (${count}):` : 'Gewählte Behandlung:';
@@ -380,15 +402,20 @@ document.addEventListener('DOMContentLoaded', () => {
       if (durationPill) {
         durationPill.style.display = 'inline-flex';
         durationPill.classList.add('duration-combo');
-        durationText.innerHTML = '<strong>⏱ Dauer: 90 Min.</strong> (Kombi-Termin)';
+        durationText.innerHTML = `<strong>⏱ Dauer: ${currentBookingDuration} Min.</strong> (Kombi-Termin, max. 90 Min.)`;
       }
       if (comboNotice) comboNotice.style.display = 'flex';
-      if (timeDurationHint) timeDurationHint.style.display = 'block';
+      if (timeDurationHint) {
+        timeDurationHint.style.display = 'block';
+        timeDurationHint.innerHTML = `<i class="fa-solid fa-clock"></i> Freie ${currentBookingDuration}-Minuten-Zeitfenster werden angezeigt.`;
+      }
     } else {
+      const single = selectedServices[0] || {};
+      const label = single.durationLabel || `ca. ${currentBookingDuration} Min.`;
       if (durationPill) {
         durationPill.style.display = 'inline-flex';
         durationPill.classList.remove('duration-combo');
-        durationText.textContent = 'Dauer: ca. 30–45 Min.';
+        durationText.textContent = 'Dauer: ' + label;
       }
       if (comboNotice) comboNotice.style.display = 'none';
       if (timeDurationHint) timeDurationHint.style.display = 'none';
@@ -407,7 +434,7 @@ document.addEventListener('DOMContentLoaded', () => {
           } else {
             timeInput.value = '';
             if (count >= 2) {
-              showToast('Uhrzeiten für dein 90-Minuten-Zeitfenster angepasst. Bitte wähle eine freie Uhrzeit.', 'info', '90 Min. Zeitfenster');
+              showToast(`Uhrzeiten für dein ${currentBookingDuration}-Minuten-Zeitfenster angepasst. Bitte wähle eine freie Uhrzeit.`, 'info', `${currentBookingDuration} Min. Zeitfenster`);
             }
           }
         }
@@ -464,6 +491,8 @@ document.addEventListener('DOMContentLoaded', () => {
       const service = btn.getAttribute('data-service') || 'Haarbehandlung';
       const price = btn.getAttribute('data-price') || 'ab 28 €';
       const category = btn.getAttribute('data-category') || '';
+      const dur = parseInt(btn.getAttribute('data-duration'), 10) || 30;
+      const durLabel = btn.getAttribute('data-duration-label') || (dur + ' Min.');
 
       // Multi-service selection is strictly for Damen services
       isDamenBooking = (category === 'damen') || 
@@ -473,8 +502,14 @@ document.addEventListener('DOMContentLoaded', () => {
                        service.toLowerCase().includes('färbung') || 
                        service.toLowerCase().includes('glossing');
 
-      selectedServices = [{ name: service, price: price, category: isDamenBooking ? 'damen' : category }];
-      currentBookingDuration = 30;
+      currentBookingDuration = Math.min(dur, 90);
+      selectedServices = [{
+        name: service,
+        price: price,
+        duration: dur,
+        durationLabel: durLabel,
+        category: isDamenBooking ? 'damen' : category
+      }];
 
       resetModalState();
       updateSelectedServicesUI();

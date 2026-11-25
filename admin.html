@@ -1041,7 +1041,7 @@ TONOYANS STUDIO Schleswig</textarea>
                 </td>
                 <td>
                   <strong>${escapeHtml(b.date)}</strong> um <strong>${escapeHtml(b.time)} Uhr</strong>
-                  ${b.duration && Number(b.duration) > 30 ? `<br><span style="display:inline-block; margin-top:4px; padding:2px 8px; border-radius:4px; background:rgba(203,172,99,0.15); color:#cbb26a; font-size:11px; font-weight:700;"><i class="fa-solid fa-clock"></i> ${b.duration} Min. (bis ${calcEndTime(b.time, b.duration)} Uhr)</span>` : ''}
+                  <br><span style="display:inline-block; margin-top:4px; padding:3px 8px; border-radius:4px; background:rgba(203,172,99,0.15); color:#cbb26a; font-size:11px; font-weight:700;"><i class="fa-solid fa-clock"></i> ${Number(b.duration) || 30} Min. (bis ${calcEndTime(b.time, b.duration || 30)} Uhr)</span>
                 </td>
                 <td>
                   <span class="status-badge"><i class="fa-solid fa-circle-check"></i> Bestätigt</span>
